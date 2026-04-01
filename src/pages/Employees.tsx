@@ -50,9 +50,9 @@ export default function Employees() {
     return matchSearch && matchDept && matchStatus
   })
 
-  function getDeptName(deptId: string) {
-    return departments.find((d) => d.id === deptId)?.name ?? ''
-  }
+  // function getDeptName(deptId: string) {
+  //   return departments.find((d) => d.id === deptId)?.name ?? ''
+  // }
 
   function openCreate() {
     setEditingId(null)
