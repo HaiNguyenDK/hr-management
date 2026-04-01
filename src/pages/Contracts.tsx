@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import type { Contract } from '@/types'
-import { contracts as initialContracts, employees } from '@/data/mockData'
+import { useContracts } from '@/hooks/useContracts'
+import { useEmployees } from '@/hooks/useEmployees'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchBar from '@/components/ui/SearchBar'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { PageSkeleton } from '@/components/ui/Skeleton'
+import DateInput from '@/components/ui/DateInput'
+import { formatDate } from '@/utils/date'
 
 type ContractForm = Omit<Contract, 'id'>
 
@@ -29,7 +33,8 @@ function formatCurrency(value: number) {
 }
 
 export default function Contracts() {
-  const [contracts, setContracts] = useState<Contract[]>(initialContracts)
+  const { data: contracts, loading, create, update, remove } = useContracts()
+  const { data: employees } = useEmployees()
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -65,25 +70,21 @@ export default function Contracts() {
     setModalOpen(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.contractNumber.trim() || !form.employeeId) return
 
-    const data: Contract = {
-      ...form,
-      id: editingId ?? crypto.randomUUID(),
-      endDate: form.endDate || null,
-    }
+    const data = { ...form, endDate: form.endDate || null }
 
     if (editingId) {
-      setContracts((prev) => prev.map((c) => (c.id === editingId ? data : c)))
+      await update(editingId, data)
     } else {
-      setContracts((prev) => [...prev, data])
+      await create(data)
     }
     setModalOpen(false)
   }
 
-  function handleDelete() {
-    setContracts((prev) => prev.filter((c) => c.id !== deleteDialog.id))
+  async function handleDelete() {
+    await remove(deleteDialog.id)
     setDeleteDialog({ open: false, id: '' })
   }
 
@@ -95,6 +96,8 @@ export default function Contracts() {
     const emp = employees.find((e) => e.id === empId)
     setForm((prev) => ({ ...prev, employeeId: empId, employeeName: emp?.fullName ?? '' }))
   }
+
+  if (loading) return <PageSkeleton cols={7} />
 
   return (
     <div className="space-y-4">
@@ -147,7 +150,7 @@ export default function Contracts() {
                   <td className="px-4 py-3 font-medium text-gray-800">{c.employeeName}</td>
                   <td className="px-4 py-3 text-gray-600">{c.type}</td>
                   <td className="px-4 py-3 text-gray-600 text-xs">
-                    {c.startDate} → {c.endDate ?? 'Vô thời hạn'}
+                    {formatDate(c.startDate)} → {c.endDate ? formatDate(c.endDate) : 'Vô thời hạn'}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{formatCurrency(c.basicSalary)}</td>
                   <td className="px-4 py-3 text-center"><StatusBadge status={c.status} /></td>
@@ -212,8 +215,7 @@ export default function Contracts() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày ký</label>
-              <input type="date" value={form.signDate} onChange={(e) => updateField('signDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.signDate} onChange={(v) => updateField('signDate', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
@@ -224,13 +226,11 @@ export default function Contracts() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày bắt đầu</label>
-              <input type="date" value={form.startDate} onChange={(e) => updateField('startDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.startDate} onChange={(v) => updateField('startDate', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày kết thúc</label>
-              <input type="date" value={form.endDate ?? ''} onChange={(e) => updateField('endDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.endDate ?? ''} onChange={(v) => updateField('endDate', v)} />
             </div>
           </div>
           <div>

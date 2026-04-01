@@ -1,22 +1,22 @@
 import { useState } from 'react'
 import type { Department } from '@/types'
-import { departments as initialDepartments } from '@/data/mockData'
+import { useDepartments } from '@/hooks/useDepartments'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchBar from '@/components/ui/SearchBar'
+import { PageSkeleton } from '@/components/ui/Skeleton'
 
-const emptyDepartment: Omit<Department, 'id'> = {
+const emptyDepartment: Omit<Department, 'id' | 'createdAt'> = {
   name: '',
   manager: '',
   employeeCount: 0,
   phone: '',
   email: '',
   description: '',
-  createdAt: new Date().toISOString().split('T')[0],
 }
 
 export default function Departments() {
-  const [departments, setDepartments] = useState<Department[]>(initialDepartments)
+  const { data: departments, loading, create, update, remove } = useDepartments()
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string }>({ open: false, id: '' })
@@ -37,35 +37,31 @@ export default function Departments() {
 
   function openEdit(dept: Department) {
     setEditingId(dept.id)
-    setForm({ name: dept.name, manager: dept.manager, employeeCount: dept.employeeCount, phone: dept.phone, email: dept.email, description: dept.description, createdAt: dept.createdAt })
+    setForm({ name: dept.name, manager: dept.manager, employeeCount: dept.employeeCount, phone: dept.phone, email: dept.email, description: dept.description })
     setModalOpen(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.name.trim()) return
 
     if (editingId) {
-      setDepartments((prev) =>
-        prev.map((d) => (d.id === editingId ? { ...d, ...form } : d)),
-      )
+      await update(editingId, form)
     } else {
-      const newDept: Department = {
-        ...form,
-        id: crypto.randomUUID(),
-      }
-      setDepartments((prev) => [...prev, newDept])
+      await create(form)
     }
     setModalOpen(false)
   }
 
-  function handleDelete() {
-    setDepartments((prev) => prev.filter((d) => d.id !== deleteDialog.id))
+  async function handleDelete() {
+    await remove(deleteDialog.id)
     setDeleteDialog({ open: false, id: '' })
   }
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+
+  if (loading) return <PageSkeleton cols={6} />
 
   return (
     <div className="space-y-4">

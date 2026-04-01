@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import type { Document, DocumentCategory, DocumentStatus, Attachment } from '@/types'
-import { documents as initialDocuments, departments } from '@/data/mockData'
+import { useDocuments } from '@/hooks/useDocuments'
+import { useDepartments } from '@/hooks/useDepartments'
 import Modal from '@/components/ui/Modal'
 import SearchBar from '@/components/ui/SearchBar'
 import StatusBadge from '@/components/ui/StatusBadge'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { PageSkeleton } from '@/components/ui/Skeleton'
+import DateInput from '@/components/ui/DateInput'
 
 const categoryIcons: Record<DocumentCategory, string> = {
   'Biểu mẫu': '📋',
@@ -57,7 +60,8 @@ function getFileExt(name: string): string {
 }
 
 export default function Documents() {
-  const [docs, setDocs] = useState<Document[]>(initialDocuments)
+  const { data: docs, loading, create, update, remove } = useDocuments()
+  const { data: departments } = useDepartments()
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -110,29 +114,28 @@ export default function Documents() {
     setFormModal(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.code || !form.title) return
     if (editingDoc) {
-      setDocs((prev) => prev.map((d) => d.id === editingDoc.id ? { ...d, ...form } : d))
+      await update(editingDoc.id, form)
     } else {
-      const newDoc: Document = { ...form, id: Date.now().toString() }
-      setDocs((prev) => [...prev, newDoc])
+      await create(form)
     }
     setFormModal(false)
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteDialog) return
-    setDocs((prev) => prev.filter((d) => d.id !== deleteDialog.id))
+    await remove(deleteDialog.id)
     setDeleteDialog(null)
   }
 
-  function handleActivate(id: string) {
-    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, status: 'Hiệu lực' as const } : d))
+  async function handleActivate(id: string) {
+    await update(id, { status: 'Hiệu lực' })
   }
 
-  function handleExpire(id: string) {
-    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, status: 'Hết hiệu lực' as const } : d))
+  async function handleExpire(id: string) {
+    await update(id, { status: 'Hết hiệu lực' })
   }
 
   function handleFileAdd(e: React.ChangeEvent<HTMLInputElement>) {
@@ -151,6 +154,8 @@ export default function Documents() {
   function handleFileRemove(attachmentId: string) {
     setForm((prev) => ({ ...prev, attachments: prev.attachments.filter((a) => a.id !== attachmentId) }))
   }
+
+  if (loading) return <PageSkeleton cards={5} cols={7} />
 
   return (
     <div className="space-y-4">
@@ -437,18 +442,15 @@ export default function Documents() {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày ban hành</label>
-              <input type="date" value={form.issuedDate} onChange={(e) => setForm({ ...form, issuedDate: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.issuedDate} onChange={(v) => setForm({ ...form, issuedDate: v })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày hiệu lực</label>
-              <input type="date" value={form.effectiveDate} onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.effectiveDate} onChange={(v) => setForm({ ...form, effectiveDate: v })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày hết hạn</label>
-              <input type="date" value={form.expiryDate || ''} onChange={(e) => setForm({ ...form, expiryDate: e.target.value || null })}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.expiryDate || ''} onChange={(v) => setForm({ ...form, expiryDate: v || null })} />
             </div>
           </div>
 

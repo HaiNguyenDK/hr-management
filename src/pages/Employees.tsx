@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import type { Employee } from '@/types'
-import { employees as initialEmployees, departments } from '@/data/mockData'
+import { useEmployees } from '@/hooks/useEmployees'
+import { useDepartments } from '@/hooks/useDepartments'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchBar from '@/components/ui/SearchBar'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { PageSkeleton } from '@/components/ui/Skeleton'
+import DateInput from '@/components/ui/DateInput'
+import { formatDate } from '@/utils/date'
 
 type EmployeeForm = Omit<Employee, 'id' | 'departmentName'>
 
@@ -25,7 +29,8 @@ const emptyForm: EmployeeForm = {
 const statuses: Employee['status'][] = ['Đang làm việc', 'Thử việc', 'Nghỉ thai sản', 'Đã nghỉ việc']
 
 export default function Employees() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees)
+  const { data: employees, loading, create, update, remove } = useEmployees()
+  const { data: departments } = useDepartments()
   const [search, setSearch] = useState('')
   const [filterDept, setFilterDept] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -66,32 +71,27 @@ export default function Employees() {
     setModalOpen(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.fullName.trim() || !form.code.trim()) return
 
     if (editingId) {
-      setEmployees((prev) =>
-        prev.map((e) => e.id === editingId ? { ...e, ...form, departmentName: getDeptName(form.departmentId) } : e),
-      )
+      await update(editingId, form)
     } else {
-      const newEmp: Employee = {
-        ...form,
-        id: crypto.randomUUID(),
-        departmentName: getDeptName(form.departmentId),
-      }
-      setEmployees((prev) => [...prev, newEmp])
+      await create(form)
     }
     setModalOpen(false)
   }
 
-  function handleDelete() {
-    setEmployees((prev) => prev.filter((e) => e.id !== deleteDialog.id))
+  async function handleDelete() {
+    await remove(deleteDialog.id)
     setDeleteDialog({ open: false, id: '' })
   }
 
   function updateField<K extends keyof EmployeeForm>(key: K, value: EmployeeForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+
+  if (loading) return <PageSkeleton cols={7} />
 
   return (
     <div className="space-y-4">
@@ -220,8 +220,8 @@ export default function Employees() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-400">Mã NV:</span> <span className="text-gray-700 ml-1">{detailModal.code}</span></div>
               <div><span className="text-gray-400">Giới tính:</span> <span className="text-gray-700 ml-1">{detailModal.gender}</span></div>
-              <div><span className="text-gray-400">Ngày sinh:</span> <span className="text-gray-700 ml-1">{detailModal.dateOfBirth}</span></div>
-              <div><span className="text-gray-400">Ngày vào làm:</span> <span className="text-gray-700 ml-1">{detailModal.startDate}</span></div>
+              <div><span className="text-gray-400">Ngày sinh:</span> <span className="text-gray-700 ml-1">{formatDate(detailModal.dateOfBirth)}</span></div>
+              <div><span className="text-gray-400">Ngày vào làm:</span> <span className="text-gray-700 ml-1">{formatDate(detailModal.startDate)}</span></div>
               <div><span className="text-gray-400">SĐT:</span> <span className="text-gray-700 ml-1">{detailModal.phone}</span></div>
               <div><span className="text-gray-400">Email:</span> <span className="text-gray-700 ml-1">{detailModal.email}</span></div>
               <div className="col-span-2"><span className="text-gray-400">Địa chỉ:</span> <span className="text-gray-700 ml-1">{detailModal.address}</span></div>
@@ -254,8 +254,7 @@ export default function Employees() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label>
-              <input type="date" value={form.dateOfBirth} onChange={(e) => updateField('dateOfBirth', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.dateOfBirth} onChange={(v) => updateField('dateOfBirth', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
@@ -284,8 +283,7 @@ export default function Employees() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày vào làm</label>
-              <input type="date" value={form.startDate} onChange={(e) => updateField('startDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.startDate} onChange={(v) => updateField('startDate', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>

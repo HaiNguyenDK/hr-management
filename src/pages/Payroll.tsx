@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import type { PayrollRecord } from '@/types'
-import { payrollRecords as initialRecords } from '@/data/mockData'
+import { usePayroll } from '@/hooks/usePayroll'
+import { supabase } from '@/lib/supabase'
 import Modal from '@/components/ui/Modal'
 import SearchBar from '@/components/ui/SearchBar'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { PageSkeleton } from '@/components/ui/Skeleton'
 
 const payrollStatusColors: Record<string, string> = {
   'Nháp': 'bg-gray-100 text-gray-600',
@@ -16,7 +18,7 @@ function formatVND(value: number) {
 }
 
 export default function Payroll() {
-  const [records, setRecords] = useState<PayrollRecord[]>(initialRecords)
+  const { data: records, loading, update, refresh } = usePayroll()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [month, setMonth] = useState(3)
@@ -35,23 +37,23 @@ export default function Payroll() {
   const totalNet = filtered.reduce((sum, r) => sum + r.netSalary, 0)
   const totalGross = filtered.reduce((sum, r) => sum + r.basicSalary + r.allowance + r.overtime, 0)
 
-  function handleApprove(id: string) {
-    setRecords((prev) => prev.map((r) => r.id === id ? { ...r, status: 'Đã duyệt' as const } : r))
+  async function handleApprove(id: string) {
+    await update(id, { status: 'Đã duyệt' })
   }
 
-  function handleMarkPaid(id: string) {
-    setRecords((prev) => prev.map((r) => r.id === id ? { ...r, status: 'Đã chi' as const } : r))
+  async function handleMarkPaid(id: string) {
+    await update(id, { status: 'Đã chi' })
   }
 
-  function handleApproveAll() {
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.month === month && r.year === year && r.status === 'Nháp'
-          ? { ...r, status: 'Đã duyệt' as const }
-          : r,
-      ),
-    )
+  async function handleApproveAll() {
+    const ids = records.filter((r) => r.month === month && r.year === year && r.status === 'Nháp').map((r) => r.id)
+    if (ids.length) {
+      await supabase.from('payroll_records').update({ status: 'Đã duyệt' }).in('id', ids)
+      await refresh()
+    }
   }
+
+  if (loading) return <PageSkeleton cards={4} cols={8} />
 
   return (
     <div className="space-y-4">

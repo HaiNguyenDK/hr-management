@@ -1,10 +1,15 @@
 import { useState } from 'react'
 import type { LeaveRequest } from '@/types'
-import { leaveRequests as initialRequests, employees } from '@/data/mockData'
+import { useLeaves } from '@/hooks/useLeaves'
+import { useEmployees } from '@/hooks/useEmployees'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchBar from '@/components/ui/SearchBar'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { PageSkeleton } from '@/components/ui/Skeleton'
+import DateInput from '@/components/ui/DateInput'
+import { formatDate } from '@/utils/date'
+import { exportLeaveDoc, type LeaveDocData } from '@/utils/exportLeaveDoc'
 
 const leaveTypes: LeaveRequest['type'][] = ['Nghỉ phép năm', 'Nghỉ ốm', 'Nghỉ việc riêng', 'Nghỉ thai sản', 'Nghỉ không lương']
 const leaveStatuses: LeaveRequest['status'][] = ['Chờ duyệt', 'Đã duyệt', 'Từ chối']
@@ -27,18 +32,21 @@ const emptyForm: LeaveForm = {
   endDate: '',
   totalDays: 1,
   reason: '',
-  status: 'Chờ duyệt',
+  status: 'Đã duyệt',
   remainingDays: 12,
 }
 
 export default function Leaves() {
-  const [requests, setRequests] = useState<LeaveRequest[]>(initialRequests)
+  const { data: requests, loading, create, update, remove } = useLeaves()
+  const { data: employees } = useEmployees()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string }>({ open: false, id: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<LeaveForm>(emptyForm)
+  const [exportDialog, setExportDialog] = useState<{ open: boolean; req: LeaveRequest | null }>({ open: false, req: null })
+  const [exportExtra, setExportExtra] = useState({ companyName: '', city: '', timeStart: '', timeEnd: '', substitute: '' })
 
   const filtered = requests.filter((r) => {
     const matchSearch =
@@ -48,7 +56,7 @@ export default function Leaves() {
     return matchSearch && matchStatus
   })
 
-  const pendingCount = requests.filter((r) => r.status === 'Chờ duyệt').length
+  const pendingCount = requests.filter((r) => r.status === 'Đã duyệt').length
 
   function openCreate() {
     setEditingId(null)
@@ -67,33 +75,28 @@ export default function Leaves() {
     setModalOpen(true)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.employeeId || !form.startDate || !form.endDate) return
 
     if (editingId) {
-      setRequests((prev) => prev.map((r) => r.id === editingId ? { ...r, ...form } : r))
+      await update(editingId, form)
     } else {
-      const newReq: LeaveRequest = {
-        ...form,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString().split('T')[0],
-      }
-      setRequests((prev) => [...prev, newReq])
+      await create(form)
     }
     setModalOpen(false)
   }
 
-  function handleDelete() {
-    setRequests((prev) => prev.filter((r) => r.id !== deleteDialog.id))
+  async function handleDelete() {
+    await remove(deleteDialog.id)
     setDeleteDialog({ open: false, id: '' })
   }
 
-  function handleApprove(id: string) {
-    setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'Đã duyệt' as const } : r))
+  async function handleApprove(id: string) {
+    await update(id, { status: 'Đã duyệt' })
   }
 
-  function handleReject(id: string) {
-    setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'Từ chối' as const } : r))
+  async function handleReject(id: string) {
+    await update(id, { status: 'Từ chối' })
   }
 
   function handleEmployeeChange(empId: string) {
@@ -112,6 +115,41 @@ export default function Leaves() {
   function updateField<K extends keyof LeaveForm>(key: K, value: LeaveForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+
+  function openExport(req: LeaveRequest) {
+    setExportDialog({ open: true, req })
+    setExportExtra({ companyName: '', city: '', timeStart: '', timeEnd: '', substitute: '' })
+  }
+
+  async function handleExport() {
+    const req = exportDialog.req
+    if (!req) return
+    const emp = employees.find((e) => e.id === req.employeeId)
+    const data: LeaveDocData = {
+      employeeName: req.employeeName,
+      position: emp?.position ?? '',
+      departmentName: req.departmentName,
+      phone: emp?.phone ?? '',
+      startDate: req.startDate,
+      endDate: req.endDate,
+      reason: req.reason,
+      leaveType: req.type,
+      totalDays: req.totalDays,
+      companyName: exportExtra.companyName,
+      city: exportExtra.city,
+      timeStart: exportExtra.timeStart,
+      timeEnd: exportExtra.timeEnd,
+      substitute: exportExtra.substitute,
+    }
+    try {
+      await exportLeaveDoc(data)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Có lỗi khi xuất file')
+    }
+    setExportDialog({ open: false, req: null })
+  }
+
+  if (loading) return <PageSkeleton cards={3} cols={9} />
 
   return (
     <div className="space-y-4">
@@ -180,7 +218,7 @@ export default function Leaves() {
                   <td className="px-4 py-3 text-gray-600">{req.departmentName}</td>
                   <td className="px-4 py-3 text-gray-600">{req.type}</td>
                   <td className="px-4 py-3 text-gray-600 text-xs">
-                    {req.startDate} → {req.endDate}
+                    {formatDate(req.startDate)} → {formatDate(req.endDate)}
                   </td>
                   <td className="px-4 py-3 text-center font-medium text-gray-700">{req.totalDays}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{req.reason}</td>
@@ -216,6 +254,14 @@ export default function Leaves() {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button onClick={() => openExport(req)}
+                        className="p-1.5 rounded-lg hover:bg-indigo-50 text-gray-400 hover:text-indigo-600" title="Xuất phiếu">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
                         </svg>
                       </button>
                       <button onClick={() => setDeleteDialog({ open: true, id: req.id })}
@@ -264,13 +310,11 @@ export default function Leaves() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Từ ngày *</label>
-              <input type="date" value={form.startDate} onChange={(e) => updateField('startDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.startDate} onChange={(v) => updateField('startDate', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Đến ngày *</label>
-              <input type="date" value={form.endDate} onChange={(e) => updateField('endDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <DateInput value={form.endDate} onChange={(v) => updateField('endDate', v)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số ngày nghỉ</label>
@@ -308,6 +352,58 @@ export default function Leaves() {
         message="Bạn có chắc chắn muốn xóa đơn nghỉ phép này?"
         confirmText="Xóa"
       />
+
+      {/* Export Dialog */}
+      <Modal open={exportDialog.open} onClose={() => setExportDialog({ open: false, req: null })} title="Xuất phiếu nghỉ phép" size="md">
+        {exportDialog.req && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+              <p><span className="text-gray-500">Nhân viên:</span> <span className="font-medium">{exportDialog.req.employeeName}</span></p>
+              <p><span className="text-gray-500">Phòng ban:</span> {exportDialog.req.departmentName}</p>
+              <p><span className="text-gray-500">Loại nghỉ:</span> {exportDialog.req.type}</p>
+              <p><span className="text-gray-500">Thời gian:</span> {formatDate(exportDialog.req.startDate)} → {formatDate(exportDialog.req.endDate)}</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tên công ty</label>
+                <input type="text" value={exportExtra.companyName} onChange={(e) => setExportExtra((p) => ({ ...p, companyName: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Công ty ABC" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Thành phố</label>
+                <input type="text" value={exportExtra.city} onChange={(e) => setExportExtra((p) => ({ ...p, city: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Hồ Chí Minh" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giờ bắt đầu nghỉ</label>
+                <input type="text" value={exportExtra.timeStart} onChange={(e) => setExportExtra((p) => ({ ...p, timeStart: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="08:00" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giờ kết thúc nghỉ</label>
+                <input type="text" value={exportExtra.timeEnd} onChange={(e) => setExportExtra((p) => ({ ...p, timeEnd: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="17:00" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Người thay thế</label>
+              <input type="text" value={exportExtra.substitute} onChange={(e) => setExportExtra((p) => ({ ...p, substitute: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tên người thay thế (nếu có)" />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setExportDialog({ open: false, req: null })} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Hủy</button>
+              <button onClick={handleExport} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Tải phiếu Word
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

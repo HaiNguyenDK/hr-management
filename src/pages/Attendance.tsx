@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { AttendanceStatus } from '@/types'
-import { attendanceRecords as initialRecords, departments } from '@/data/mockData'
+import { useAttendance } from '@/hooks/useAttendance'
+import { useDepartments } from '@/hooks/useDepartments'
 import SearchBar from '@/components/ui/SearchBar'
+import { PageSkeleton } from '@/components/ui/Skeleton'
 
 const statusColors: Record<AttendanceStatus, string> = {
   'Đi làm': 'bg-green-100 text-green-700',
@@ -34,12 +36,17 @@ function getDayOfWeek(year: number, month: number, day: number) {
 const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 
 export default function Attendance() {
-  const [records, setRecords] = useState(initialRecords)
+  const { data: records, loading, fetch: fetchAttendance, updateStatus: updateAttendanceStatus } = useAttendance()
+  const { data: departments } = useDepartments()
   const [search, setSearch] = useState('')
   const [filterDept, setFilterDept] = useState('')
   const [month, setMonth] = useState(3)
   const [year, setYear] = useState(2026)
   const [editingCell, setEditingCell] = useState<{ empId: string; day: number } | null>(null)
+
+  useEffect(() => {
+    fetchAttendance(month, year)
+  }, [month, year, fetchAttendance])
 
   const daysCount = getDaysInMonth(year, month)
   const days = Array.from({ length: daysCount }, (_, i) => i + 1)
@@ -52,20 +59,18 @@ export default function Attendance() {
     return matchSearch && matchDept
   })
 
-  function updateStatus(empId: string, day: number, status: AttendanceStatus) {
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.employeeId === empId
-          ? { ...r, days: { ...r.days, [day]: status } }
-          : r,
-      ),
-    )
+  async function updateStatus(empId: string, day: number, status: AttendanceStatus) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    await updateAttendanceStatus(empId, dateStr, status)
+    await fetchAttendance(month, year)
     setEditingCell(null)
   }
 
   function countStatus(days: Record<number, AttendanceStatus>, status: AttendanceStatus) {
     return Object.values(days).filter((s) => s === status).length
   }
+
+  if (loading) return <PageSkeleton variant="grid" />
 
   return (
     <div className="space-y-4">
