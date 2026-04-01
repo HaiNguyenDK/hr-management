@@ -1,4 +1,4 @@
-import type { Department, Employee, Contract, AttendanceRecord, AttendanceStatus, LeaveRequest, PayrollRecord, Document, Attachment } from '@/types'
+import type { Department, Employee, Contract, AttendanceRecord, AttendanceStatus, LeaveRequest, PayrollRecord, Document } from '@/types'
 
 export const departments: Department[] = [
   { id: '1', name: 'Phòng Kỹ thuật', manager: 'Nguyễn Văn An', employeeCount: 35, phone: '024-1234-001', email: 'kythuat@company.vn', description: 'Phụ trách phát triển sản phẩm và hạ tầng kỹ thuật', createdAt: '2020-01-15' },
