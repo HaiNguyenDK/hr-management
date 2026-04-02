@@ -112,3 +112,38 @@ export interface Document {
   version: string
   attachments: Attachment[]
 }
+
+export type DebtTarget = 'Nhân viên' | 'Đối tác'
+export type DebtType = 'Tạm ứng' | 'Vay công ty' | 'Trừ dần' | 'Công nợ mua hàng' | 'Công nợ dịch vụ' | 'Khác'
+export type DebtStatus = 'Đang nợ' | 'Đã thanh toán' | 'Quá hạn' | 'Thanh toán một phần'
+
+export interface DebtRecord {
+  id: string
+  code: string
+  target: DebtTarget
+  /** Tên nhân viên hoặc đối tác */
+  counterpartyName: string
+  /** ID nhân viên (null nếu đối tác) */
+  employeeId: string | null
+  departmentName: string
+  type: DebtType
+  description: string
+  totalAmount: number
+  paidAmount: number
+  remainingAmount: number
+  issueDate: string
+  dueDate: string | null
+  status: DebtStatus
+  note: string
+  createdAt: string
+}
+
+export interface DebtPayment {
+  id: string
+  debtId: string
+  amount: number
+  paymentDate: string
+  method: string
+  note: string
+  createdAt: string
+}

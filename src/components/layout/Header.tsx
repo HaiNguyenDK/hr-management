@@ -9,6 +9,7 @@ const pageTitles: Record<string, string> = {
   '/leaves': 'Quản lý nghỉ phép',
   '/payroll': 'Bảng lương',
   '/documents': 'Quản lý tài liệu',
+  '/debts': 'Theo dõi công nợ',
 }
 
 export default function Header() {

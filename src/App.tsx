@@ -8,6 +8,7 @@ import Attendance from '@/pages/Attendance'
 import Leaves from '@/pages/Leaves'
 import Payroll from '@/pages/Payroll'
 import Documents from '@/pages/Documents'
+import Debts from '@/pages/Debts'
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/leaves" element={<Leaves />} />
           <Route path="/payroll" element={<Payroll />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/debts" element={<Debts />} />
         </Route>
       </Routes>
     </BrowserRouter>
